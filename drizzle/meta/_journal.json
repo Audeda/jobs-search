@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1781805191043,
+      "tag": "0000_overjoyed_namor",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1781805377721,
+      "tag": "0001_magical_tomas",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1781806895001,
+      "tag": "0002_chemical_rick_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1781807257566,
+      "tag": "0003_tough_ozymandias",
+      "breakpoints": true
+    }
+  ]
+}

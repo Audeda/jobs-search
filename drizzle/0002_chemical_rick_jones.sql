@@ -1,0 +1,1 @@
+ALTER TABLE `search_criteria` ADD `max_age_months` int DEFAULT 1 NOT NULL;
