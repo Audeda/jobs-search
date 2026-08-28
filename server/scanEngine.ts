@@ -86,6 +86,45 @@ export function buildScanSummary(newJobs: number, totalFound: number, samples: I
   }`;
 }
 
+const MOCK_COMPANIES = [
+  "Neurons Bordeaux",
+  "Aquitaine Data Lab",
+  "Cortex Sud-Ouest",
+  "Vignes & Vecteurs",
+  "Gironde AI Studio",
+];
+
+/**
+ * Génère de fausses offres à partir des critères actifs, pour simuler un scan en local
+ * quand aucun LLM n'est configuré (cf. CLAUDE.md, "Contournement scan LLM en local").
+ * Ne doit jamais être appelée en production.
+ */
+export function generateMockJobs(
+  criteria: { jobTitle: string; location: string }[],
+): IncomingJob[] {
+  const today = new Date().toISOString().split("T")[0];
+  return criteria.slice(0, 5).map((c, i) => ({
+    title: c.jobTitle,
+    company: MOCK_COMPANIES[i % MOCK_COMPANIES.length],
+    location: c.location || "Bordeaux",
+    contractType: "CDI",
+    salary: "Non spécifié",
+    publicationDate: today,
+    source: "Indeed",
+    url: "https://example.com/mock-job",
+    category: "Spécialiste IA",
+    remoteWork: "Télétravail partiel",
+    experience: "2-5 ans",
+    sector: "Tech",
+    shortDescription:
+      "Offre simulée générée localement (mock LLM — aucun appel réseau, pas de credentials Manus/OpenAI requis).",
+    fullDescription:
+      "Cette offre est un jeu de données factice utilisé pour tester le flux de scan en local, sans dépendre d'un LLM réel. Elle ne doit jamais apparaître en production.",
+    contactEmail: "mock@example.com",
+    skills: ["Python", "Machine Learning"],
+  }));
+}
+
 /**
  * Enregistre un nouveau scan, ingère les offres fournies, met à jour le scan et notifie l'owner.
  * Utilisé par l'endpoint d'ingestion appelé par l'agent cron.
@@ -94,12 +133,15 @@ export async function recordScanWithJobs(
   trigger: "scheduled" | "manual" | "seed",
   incoming: IncomingJob[],
   taskUid?: string | null,
+  existingScanId?: number,
 ): Promise<{ scanId?: number; totalFound: number; newJobs: number }> {
-  const scanId = await createScan({
-    status: "running",
-    trigger,
-    scheduleCronTaskUid: taskUid ?? null,
-  });
+  const scanId =
+    existingScanId ??
+    (await createScan({
+      status: "running",
+      trigger,
+      scheduleCronTaskUid: taskUid ?? null,
+    }));
 
   try {
     const { totalFound, newJobs } = await ingestJobs(incoming, scanId);

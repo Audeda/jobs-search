@@ -30,6 +30,8 @@ Guidance for Claude Code when working in this repository.
 DATABASE_URL=mysql://root:<password>@127.0.0.1:3306/ia_jobs_bordeaux
 VITE_OAUTH_PORTAL_URL=https://example.com   # placeholder local, cf. limitations
 VITE_APP_ID=preview                          # placeholder local
+JWT_SECRET=<chaîne aléatoire>                # signe les cookies de session ; sans elle, secret vide (voir audit-site.md, sévérité Critique)
+ENABLE_DEV_LOGIN=true                        # active /api/dev/login, cf. section "Contournement admin en local" ci-dessous
 ```
 
 `VITE_OAUTH_PORTAL_URL`/`VITE_APP_ID` sont nécessaires même en local car `getLoginUrl()` (`client/src/const.ts`) construit une `URL()` au chargement de la page d'accueil et plante sinon (`TypeError: Invalid URL`).
@@ -51,11 +53,28 @@ DATABASE_URL=... npx drizzle-kit migrate
 DATABASE_URL=... SEED_PATH=$(pwd)/ia_bordeaux_jobs.json node seed.mjs
 ```
 
+## Contournement admin en local
+
+Le vrai login OAuth Manus (`server/_core/oauth.ts`, `server/_core/sdk.ts`) est inutilisable hors plateforme manus.im (cf. limitation ci-dessous). Pour pouvoir quand même tester l'espace `/admin` en local, une route de secours existe : `server/_core/devAuth.ts`.
+
+- **Activation** : nécessite `ENABLE_DEV_LOGIN=true` dans `.env` **et** `NODE_ENV !== "production"` (double verrou, voir `ENV.isProduction` dans `server/_core/env.ts`) — sans les deux, la route n'est même pas enregistrée sur l'`app` Express.
+- **Usage** : lancer le serveur en dev, aller sur `/admin`, cliquer sur "Connexion dev (local, sans OAuth)" (visible uniquement en mode Vite dev, `import.meta.env.DEV`) — ou visiter directement `http://localhost:3000/api/dev/login`.
+- Crée/upsert un utilisateur `openId = "dev-local-admin"` avec `role: "admin"` directement en base, signe une session JWT localement (`sdk.createSessionToken`, pas d'appel réseau vers Manus) et pose le cookie de session.
+- **Ne jamais activer `ENABLE_DEV_LOGIN` en production/déploiement Manus** — la route donnerait un accès admin sans authentification à quiconque connaît l'URL.
+
+## Contournement scan LLM en local
+
+`invokeLLM` (`server/_core/llm.ts`) appelle un service compatible OpenAI (Manus Forge par défaut, ou toute URL `BUILT_IN_FORGE_API_URL` compatible `/v1/chat/completions`) et échoue si `BUILT_IN_FORGE_API_KEY` est absent — systématique en local sans déploiement Manus.
+
+- **Activation automatique** : dans `scans.runNow` (`routers.ts`), dès que `ENV.forgeApiKey` est vide **et** `!ENV.isProduction`, le scan manuel utilise `generateMockJobs()` (`server/scanEngine.ts`) au lieu d'appeler `invokeLLM` — aucune variable à positionner, ça marche par défaut dès qu'aucune clé n'est configurée. En production, une clé manquante reste une vraie erreur (pas de fallback silencieux).
+- Génère jusqu'à 5 offres factices (une par critère actif), clairement identifiées comme simulées dans `shortDescription`/`fullDescription` (`"Offre simulée générée localement (mock LLM...)"`) pour ne jamais être confondues avec de vraies données scrapées.
+- Traverse tout le pipeline réel : `recordScanWithJobs`, déduplication, historique des scans — permet de tester le flux de bout en bout sans coût ni credentials.
+- Pour utiliser un vrai LLM en local à la place (offres réellement générées, coût réel) : configurer `BUILT_IN_FORGE_API_KEY` avec une clé OpenAI valide et `BUILT_IN_FORGE_API_URL=https://api.openai.com` dans `.env` — nécessite aussi d'ajouter un paramètre `model` à l'appel `invokeLLM` dans `routers.ts` (l'API OpenAI l'exige, contrairement à Forge qui a un défaut serveur).
+
 ## Limitations connues en local
 
-- **Espace admin (`/admin`) inaccessible** : le login passe par OAuth Manus (`server/_core/oauth.ts`, `server/_core/sdk.ts`), qui nécessite un vrai projet déployé sur manus.im. Sans ça, la page affiche "Accès réservé" — comportement attendu, pas un bug.
-- **Upload de fichiers, notifications, cron "Heartbeat"** (`server/storage.ts`, `server/_core/notification.ts`, `server/_core/heartbeat.ts`) dépendent des services "Forge" internes à Manus (`BUILT_IN_FORGE_API_URL`/`KEY`) — pas de clé auto-délivrable hors plateforme.
-- **Scan LLM manuel** (`scans.runNow` dans `routers.ts`) appelle `invokeLLM` (`server/_core/llm.ts`), également un service Manus — ne fonctionnera pas sans déploiement/credentials Manus.
+- **Espace admin (`/admin`) inaccessible via OAuth réel** : le login passe par OAuth Manus (`server/_core/oauth.ts`, `server/_core/sdk.ts`), qui nécessite un vrai projet déployé sur manus.im. Sans ça, la page affiche "Accès réservé" — comportement attendu, pas un bug. Voir "Contournement admin en local" ci-dessus pour tester quand même la fonctionnalité.
+- **Upload de fichiers, notifications, cron "Heartbeat"** (`server/storage.ts`, `server/_core/notification.ts`, `server/_core/heartbeat.ts`) dépendent des services "Forge" internes à Manus (`BUILT_IN_FORGE_API_URL`/`KEY`) — pas de clé auto-délivrable hors plateforme, et pas de mock local pour ceux-ci (contrairement au scan LLM ci-dessus).
 
 ## Suivi des bugs et écarts (site_internet_bugs/)
 
