@@ -50,11 +50,20 @@ export default function Admin() {
         title="Accès réservé"
         body="Vous devez vous connecter pour accéder au panneau d'administration."
         action={
-          <a href={getLoginUrl()}>
-            <Button className="gap-1.5">
-              <Shield className="h-4 w-4" /> Se connecter
-            </Button>
-          </a>
+          <div className="flex flex-col items-center gap-2">
+            <a href={getLoginUrl()}>
+              <Button className="gap-1.5">
+                <Shield className="h-4 w-4" /> Se connecter
+              </Button>
+            </a>
+            {import.meta.env.DEV && (
+              <a href="/api/dev/login">
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+                  Connexion dev (local, sans OAuth)
+                </Button>
+              </a>
+            )}
+          </div>
         }
       />
     );
@@ -385,7 +394,10 @@ function ScansManager() {
       utils.scans.list.invalidate();
       toast.success(res.message);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      utils.scans.list.invalidate();
+      toast.error(e.message);
+    },
   });
 
   const list = (scans ?? []) as Scan[];
